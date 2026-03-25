@@ -374,7 +374,8 @@ function makeCall() {
 
     var options = {
         mediaConstraints: { audio: true, video: false },
-        pcConfig: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
+        pcConfig: { iceServers: [] },
+        rtcOfferConstraints: { offerToReceiveAudio: true, offerToReceiveVideo: false },
     };
 
     currentSession = phone.call('sip:' + num + '@' + sipConfig.server, options);
@@ -407,7 +408,8 @@ function acceptCall() {
 
     currentSession.answer({
         mediaConstraints: { audio: true, video: false },
-        pcConfig: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
+        pcConfig: { iceServers: [] },
+        rtcOfferConstraints: { offerToReceiveAudio: true, offerToReceiveVideo: false },
     });
 }
 
