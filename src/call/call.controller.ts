@@ -16,7 +16,7 @@ export class CallController {
   async originate(@Body() dto: OriginateDto) {
     const result = await this.ami.sendAction({
       Action: 'Originate',
-      Channel: dto.from ? `SIP/${dto.from}` : `SIP/trunk/${dto.number}`,
+      Channel: dto.from ? `PJSIP/${dto.from}` : `PJSIP/${dto.number}`,
       Exten: dto.number,
       Context: dto.context || 'from-internal',
       Priority: '1',
