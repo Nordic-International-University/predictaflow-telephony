@@ -320,13 +320,25 @@ function tryConnect(wsUri, user, pass, server, onFail) {
         });
 
         phone.on('registrationFailed', function(ev) {
-            phone.stop();
-            phone = null;
-            if (onFail) onFail();
+            var cause = ev.cause || 'noma\'lum';
+            var status = ev.response ? ev.response.status_code : '';
+            console.error('JsSIP registrationFailed:', cause, status, ev);
+            showLoginErr('Register xato: ' + cause + ' ' + status);
+            setSipStatus('r', 'Register xato: ' + cause);
+            // WS ulangan lekin register bo'lmadi — boshqa transport sinash shart emas
+        });
+
+        phone.on('registrationExpiring', function() {
+            console.log('JsSIP: registration yangilanmoqda...');
         });
 
         phone.on('disconnected', function() {
+            console.log('JsSIP: disconnected');
             setSipStatus('y', 'Uzildi — qayta ulanilmoqda...');
+        });
+
+        phone.on('sipEvent', function(ev) {
+            console.log('JsSIP sipEvent:', ev);
         });
 
         phone.on('newRTCSession', function(ev) {
@@ -338,13 +350,7 @@ function tryConnect(wsUri, user, pass, server, onFail) {
 
         phone.start();
 
-        // 8 sek kutamiz — registered bo'lmasa onFail
-        setTimeout(function() {
-            if (!phone || !phone.isRegistered()) {
-                if (phone) { phone.stop(); phone = null; }
-                if (onFail) onFail();
-            }
-        }, 8000);
+        // Timeout yo'q — registrationFailed event o'zi handle qiladi
 
     } catch(e) {
         if (onFail) onFail();
