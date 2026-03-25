@@ -25,8 +25,7 @@ Qo'ng'iroqlarni boshqarish, status kuzatuv, CDR, call recording.
 
 ### Ulanish
 FreePBX AMI: \`${process.env.AMI_HOST}:${process.env.AMI_PORT}\`
-FreePBX ARI: \`${process.env.ARI_URL}\`
-Faqat local WiFi — domen yo'q, IP orqali.
+Faqat local — 127.0.0.1 (backend shu serverda ishlaydi).
     `)
     .setVersion('1.0.0')
     .addTag('Call', 'Qo\'ng\'iroq boshqaruvi — originate, hangup, transfer, hold, mute')
@@ -46,7 +45,6 @@ Faqat local WiFi — domen yo'q, IP orqali.
 
   console.log(`\n🚀 Telephony API: http://${host}:${port}`);
   console.log(`📖 Swagger:       http://${host}:${port}/docs`);
-  console.log(`📞 AMI:           ${process.env.AMI_HOST}:${process.env.AMI_PORT}`);
-  console.log(`🔌 ARI:           ${process.env.ARI_URL}\n`);
+  console.log(`📞 AMI:           ${process.env.AMI_HOST}:${process.env.AMI_PORT}\n`);
 }
 bootstrap();

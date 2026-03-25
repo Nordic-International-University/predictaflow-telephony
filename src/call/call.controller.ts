@@ -1,22 +1,17 @@
-import { Controller, Post, Get, Delete, Body, Param, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import { Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { AmiService } from '../common/ami.service';
-import { AriService } from '../common/ari.service';
 import { OriginateDto, TransferDto, HangupDto, DtmfDto } from './call.dto';
 
 @ApiTags('Call')
 @Controller('call')
 export class CallController {
-  constructor(
-    private readonly ami: AmiService,
-    private readonly ari: AriService,
-  ) {}
+  constructor(private readonly ami: AmiService) {}
 
   @Post('originate')
   @ApiOperation({
     summary: "Qo'ng'iroq boshlash",
-    description: `Yangi qo'ng'iroqni Asterisk orqali boshlash.
-    FreePBX trunk orqali tashqi raqamga yoki ichki extension ga qo'ng'iroq qiladi.`,
+    description: "Yangi qo'ng'iroqni Asterisk AMI orqali boshlash.",
   })
   async originate(@Body() dto: OriginateDto) {
     const result = await this.ami.sendAction({
@@ -33,30 +28,18 @@ export class CallController {
   }
 
   @Post('hangup')
-  @ApiOperation({
-    summary: "Qo'ng'iroqni tugatish",
-    description: "Faol qo'ng'iroqni kanal ID orqali tugatish.",
-  })
+  @ApiOperation({ summary: "Qo'ng'iroqni tugatish" })
   async hangup(@Body() dto: HangupDto) {
-    try {
-      await this.ari.hangup(dto.channelId, dto.reason);
-      return { status: 'ok', channelId: dto.channelId };
-    } catch (e) {
-      // AMI orqali harakat
-      const result = await this.ami.sendAction({
-        Action: 'Hangup',
-        Channel: dto.channelId,
-        Cause: dto.reason === 'busy' ? '17' : '16',
-      });
-      return { status: result?.Response === 'Success' ? 'ok' : 'error', result };
-    }
+    const result = await this.ami.sendAction({
+      Action: 'Hangup',
+      Channel: dto.channelId,
+      Cause: dto.reason === 'busy' ? '17' : '16',
+    });
+    return { status: result?.Response === 'Success' ? 'ok' : 'error', result };
   }
 
   @Post('transfer')
-  @ApiOperation({
-    summary: "Qo'ng'iroqni boshqa raqamga o'tkazish",
-    description: "Faol qo'ng'iroqni boshqa extension yoki tashqi raqamga redirect qilish.",
-  })
+  @ApiOperation({ summary: "Qo'ng'iroqni o'tkazish" })
   async transfer(@Body() dto: TransferDto) {
     const result = await this.ami.sendAction({
       Action: 'Redirect',
@@ -69,93 +52,57 @@ export class CallController {
   }
 
   @Post('hold')
-  @ApiOperation({ summary: "Hold — qo'ng'iroqni kutishga qo'yish" })
+  @ApiOperation({ summary: "Hold — kutishga qo'yish" })
   async hold(@Body('channelId') channelId: string) {
-    await this.ari.hold(channelId);
-    return { status: 'ok', channelId, action: 'hold' };
-  }
-
-  @Post('unhold')
-  @ApiOperation({ summary: "Unhold — kutishdan olish" })
-  async unhold(@Body('channelId') channelId: string) {
-    await this.ari.unhold(channelId);
-    return { status: 'ok', channelId, action: 'unhold' };
+    const result = await this.ami.sendAction({ Action: 'Park', Channel: channelId, Timeout: '300' });
+    return { status: 'ok', channelId, action: 'hold', result };
   }
 
   @Post('mute')
   @ApiOperation({ summary: "Mute — mikrofon o'chirish" })
   async mute(@Body('channelId') channelId: string) {
-    await this.ari.mute(channelId, 'in');
-    return { status: 'ok', channelId, action: 'mute' };
+    const result = await this.ami.sendAction({ Action: 'MuteAudio', Channel: channelId, Direction: 'in', State: 'on' });
+    return { status: 'ok', channelId, action: 'mute', result };
   }
 
   @Post('unmute')
   @ApiOperation({ summary: "Unmute — mikrofon yoqish" })
   async unmute(@Body('channelId') channelId: string) {
-    await this.ari.unmute(channelId, 'in');
-    return { status: 'ok', channelId, action: 'unmute' };
+    const result = await this.ami.sendAction({ Action: 'MuteAudio', Channel: channelId, Direction: 'in', State: 'off' });
+    return { status: 'ok', channelId, action: 'unmute', result };
   }
 
   @Post('dtmf')
-  @ApiOperation({ summary: 'DTMF yuborish', description: "Faol kanalga DTMF tonlar yuborish (masalan IVR uchun)." })
+  @ApiOperation({ summary: 'DTMF yuborish' })
   async dtmf(@Body() dto: DtmfDto) {
-    await this.ari.sendDtmf(dto.channelId, dto.digits);
-    return { status: 'ok', channelId: dto.channelId, digits: dto.digits };
+    const result = await this.ami.sendAction({ Action: 'PlayDTMF', Channel: dto.channelId, Digit: dto.digits });
+    return { status: 'ok', channelId: dto.channelId, digits: dto.digits, result };
   }
 
   @Get('active')
-  @ApiOperation({
-    summary: "Faol qo'ng'iroqlar",
-    description: "Hozirgi barcha faol kanallar (qo'ng'iroqlar) ro'yxati.",
-  })
+  @ApiOperation({ summary: "Faol qo'ng'iroqlar" })
   async getActive() {
-    try {
-      const channels = await this.ari.getChannels();
-      return { count: channels.length, channels };
-    } catch {
-      // AMI fallback
-      const result = await this.ami.sendAction({ Action: 'CoreShowChannels' });
-      return { source: 'ami', result };
-    }
-  }
-
-  @Get('active/:channelId')
-  @ApiOperation({ summary: 'Kanal tafsiloti' })
-  async getChannel(@Param('channelId') channelId: string) {
-    return this.ari.getChannel(channelId);
-  }
-
-  @Get('bridges')
-  @ApiOperation({ summary: "Bridgelar (konferens qo'ng'iroqlar)" })
-  async getBridges() {
-    const bridges = await this.ari.getBridges();
-    return { count: bridges.length, bridges };
+    return this.ami.sendAction({ Action: 'CoreShowChannels' });
   }
 
   @Get('endpoints')
-  @ApiOperation({
-    summary: 'SIP endpointlar (telefonlar)',
-    description: "Barcha ro'yxatga olingan SIP/PJSIP endpointlar va ularning holati.",
-  })
-  @ApiQuery({ name: 'tech', required: false, description: 'SIP, PJSIP, IAX2', example: 'PJSIP' })
-  async getEndpoints(@Query('tech') tech?: string) {
-    if (tech) {
-      return this.ari.getEndpointsByTech(tech);
-    }
-    return this.ari.getEndpoints();
+  @ApiOperation({ summary: 'SIP endpointlar' })
+  async getEndpoints() {
+    return this.ami.sendAction({ Action: 'SIPpeers' });
   }
 
   @Get('info')
-  @ApiOperation({ summary: 'Asterisk server ma\'lumoti', description: 'Versiya, uptime, modullar.' })
+  @ApiOperation({ summary: 'Asterisk server info' })
   async getInfo() {
-    try {
-      const info = await this.ari.getAsteriskInfo();
-      return info;
-    } catch {
-      return {
-        ami_connected: this.ami.isConnected(),
-        ami_host: `${process.env.AMI_HOST}:${process.env.AMI_PORT}`,
-      };
-    }
+    const [version, uptime] = await Promise.all([
+      this.ami.sendAction({ Action: 'CoreSettings' }).catch(() => null),
+      this.ami.sendAction({ Action: 'CoreStatus' }).catch(() => null),
+    ]);
+    return {
+      ami_connected: this.ami.isConnected(),
+      version: version?.AsteriskVersion || null,
+      uptime: uptime?.CoreUptime || null,
+      channels: uptime?.CoreCurrentCalls || null,
+    };
   }
 }

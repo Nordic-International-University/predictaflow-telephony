@@ -3,7 +3,6 @@ import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { AmiService } from '../common/ami.service';
-import { AriService } from '../common/ari.service';
 
 /** Raqam holatlari */
 export enum CallDisposition {
@@ -56,10 +55,7 @@ class CheckNumberDto {
 @ApiTags('Status')
 @Controller('status')
 export class StatusController {
-  constructor(
-    private readonly ami: AmiService,
-    private readonly ari: AriService,
-  ) {}
+  constructor(private readonly ami: AmiService) {}
 
   @Get('dispositions')
   @ApiOperation({
@@ -117,20 +113,8 @@ export class StatusController {
     description: 'Barcha SIP/PJSIP telefonlarning onlayn/offlayn holati.',
   })
   async getAllPeers() {
-    try {
-      const endpoints = await this.ari.getEndpoints();
-      return {
-        count: endpoints.length,
-        peers: endpoints.map((ep: any) => ({
-          tech: ep.technology,
-          resource: ep.resource,
-          state: ep.state,
-          channels: ep.channel_ids?.length || 0,
-        })),
-      };
-    } catch {
-      const result = await this.ami.sendAction({ Action: 'SIPpeers' });
-      return { source: 'ami', result };
+    const result = await this.ami.sendAction({ Action: 'SIPpeers' });
+    return result;
     }
   }
 

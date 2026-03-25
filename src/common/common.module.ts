@@ -1,10 +1,9 @@
 import { Global, Module } from '@nestjs/common';
 import { AmiService } from './ami.service';
-import { AriService } from './ari.service';
 
 @Global()
 @Module({
-  providers: [AmiService, AriService],
-  exports: [AmiService, AriService],
+  providers: [AmiService],
+  exports: [AmiService],
 })
 export class CommonModule {}
