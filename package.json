@@ -1,0 +1,36 @@
+{
+  "name": "telephony",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "dev": "ts-node -r tsconfig-paths/register src/main.ts",
+    "start:dev": "ts-node -r tsconfig-paths/register src/main.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@nestjs/cli": "^11.0.16",
+    "@nestjs/common": "^11.1.17",
+    "@nestjs/config": "^4.0.3",
+    "@nestjs/core": "^11.1.17",
+    "@nestjs/platform-express": "^11.1.17",
+    "@nestjs/schedule": "^6.1.1",
+    "@nestjs/swagger": "^11.2.6",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.5.0",
+    "axios": "^1.13.6",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.4",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "swagger-ui-express": "^5.0.1",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^6.0.2"
+  }
+}
