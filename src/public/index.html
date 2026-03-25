@@ -284,12 +284,10 @@ function doLogin() {
     sipConfig = { server: server, user: user, pass: pass };
     showLoginErr('Ulanilmoqda...');
 
-    // Avval WSS (8089), keyin WS (8088)
-    tryConnect('wss://' + server + ':8089/ws', user, pass, server, function() {
-        tryConnect('ws://' + server + ':8088/ws', user, pass, server, function() {
-            showLoginErr('Server ga ulanib bo\'lmadi. WSS:8089 va WS:8088 sinaldi.');
-            setSipStatus('r', 'Ulanmadi');
-        });
+    // WS (8088) — local network uchun WSS kerak emas
+    tryConnect('ws://' + server + ':8088/ws', user, pass, server, function() {
+        showLoginErr('Server ga ulanib bo\'lmadi: ws://' + server + ':8088/ws');
+        setSipStatus('r', 'Ulanmadi');
     });
 }
 
