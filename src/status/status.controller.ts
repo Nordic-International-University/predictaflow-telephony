@@ -115,7 +115,6 @@ export class StatusController {
   async getAllPeers() {
     const result = await this.ami.sendAction({ Action: 'SIPpeers' });
     return result;
-    }
   }
 
   @Get('trunks')
