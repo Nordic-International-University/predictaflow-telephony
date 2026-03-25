@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PredictaFlow Telephony</title>
-    <script src="https://cdn.jsdelivr.net/npm/sip.js@0.21.2/lib/platform/web/sip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jssip/dist/jssip.min.js"></script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
         body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh}
@@ -258,7 +258,7 @@
 
 <script>
 const API = window.location.origin;
-let ua = null;
+let phone = null;
 let currentSession = null;
 let callTimerInterval = null;
 let callStartTime = null;
@@ -273,102 +273,81 @@ async function api(m, p, b) {
     try { const r = await fetch(API + p, o); return r.json(); } catch(e) { return { error: e.message }; }
 }
 
-// ═══ SIP LOGIN ═══
+// ═══ SIP LOGIN (JsSIP) ═══
 function doLogin() {
     const server = document.getElementById('sipServer').value.trim();
     const user = document.getElementById('sipUser').value.trim();
     const pass = document.getElementById('sipPass').value.trim();
 
-    if (!server || !user || !pass) {
-        showLoginErr("Barcha maydonlarni to'ldiring");
-        return;
-    }
+    if (!server || !user || !pass) { showLoginErr("Barcha maydonlarni to'ldiring"); return; }
 
     sipConfig = { server: server, user: user, pass: pass };
     showLoginErr('Ulanilmoqda...');
 
+    // Avval WSS (8089), keyin WS (8088)
+    tryConnect('wss://' + server + ':8089/ws', user, pass, server, function() {
+        tryConnect('ws://' + server + ':8088/ws', user, pass, server, function() {
+            showLoginErr('Server ga ulanib bo\'lmadi. WSS:8089 va WS:8088 sinaldi.');
+            setSipStatus('r', 'Ulanmadi');
+        });
+    });
+}
+
+function tryConnect(wsUri, user, pass, server, onFail) {
     try {
-        const wsUri = 'wss://' + server + ':8089/ws';
-        const sipUri = 'sip:' + user + '@' + server;
-
-        const transportOptions = {
-            server: wsUri,
-            traceSip: false,
-            connectionTimeout: 10,
+        var socket = new JsSIP.WebSocketInterface(wsUri);
+        var config = {
+            sockets: [socket],
+            uri: 'sip:' + user + '@' + server,
+            password: pass,
+            display_name: user,
+            register: true,
+            register_expires: 300,
+            session_timers: false,
         };
 
-        const userAgentOptions = {
-            uri: SIP.UserAgent.makeURI(sipUri),
-            transportOptions: transportOptions,
-            authorizationUsername: user,
-            authorizationPassword: pass,
-            displayName: user,
-            sessionDescriptionHandlerFactoryOptions: {
-                peerConnectionConfiguration: {
-                    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-                }
-            },
-            delegate: {
-                onInvite: onIncomingCall,
-                onConnect: function() {
-                    setSipStatus('g', 'Ulangan: ' + user + '@' + server);
-                    document.getElementById('loginOverlay').style.display = 'none';
-                    document.getElementById('userInfo').innerHTML = '<b>' + user + '</b> @ ' + server;
-                    loadOverview();
-                },
-                onDisconnect: function(error) {
-                    if (error) {
-                        setSipStatus('r', 'Uzildi');
-                    }
-                },
-                onRegister: function() {
-                    setSipStatus('g', 'Ro\'yxatdan o\'tdi: ' + user);
-                },
-            },
-            logLevel: 'warn',
-        };
+        phone = new JsSIP.UA(config);
 
-        ua = new SIP.UserAgent(userAgentOptions);
-
-        const registererOptions = {
-            expires: 300,
-        };
-
-        const registerer = new SIP.Registerer(ua, registererOptions);
-
-        ua.start().then(function() {
-            registerer.register().then(function() {
-                setSipStatus('g', 'Ulangan: ' + user);
-                document.getElementById('loginOverlay').style.display = 'none';
-                document.getElementById('userInfo').innerHTML = '<b>' + user + '</b> @ ' + server;
-                loadOverview();
-            }).catch(function(e) {
-                showLoginErr('Ro\'yxatdan o\'tish xatosi: ' + (e.message || e));
-                setSipStatus('r', 'Xato');
-            });
-        }).catch(function(e) {
-            // WSS ishlamasa WS bilan harakat
-            const wsUriPlain = 'ws://' + server + ':8088/ws';
-            transportOptions.server = wsUriPlain;
-
-            ua = new SIP.UserAgent(userAgentOptions);
-            ua.start().then(function() {
-                registerer.register().then(function() {
-                    setSipStatus('g', 'Ulangan: ' + user);
-                    document.getElementById('loginOverlay').style.display = 'none';
-                    document.getElementById('userInfo').innerHTML = '<b>' + user + '</b> @ ' + server;
-                    loadOverview();
-                }).catch(function(e2) {
-                    showLoginErr('Ulanib bo\'lmadi: ' + (e2.message || e2));
-                });
-            }).catch(function(e2) {
-                showLoginErr('Server ga ulanib bo\'lmadi. WSS:8089 va WS:8088 sinaldi.');
-                setSipStatus('r', 'Ulanmadi');
-            });
+        phone.on('connected', function() {
+            console.log('JsSIP: WebSocket ulandi (' + wsUri + ')');
         });
 
-    } catch (e) {
-        showLoginErr('Xato: ' + e.message);
+        phone.on('registered', function() {
+            setSipStatus('g', 'Ulangan: ' + user + '@' + server);
+            document.getElementById('loginOverlay').style.display = 'none';
+            document.getElementById('userInfo').innerHTML = '<b>' + user + '</b> @ ' + server;
+            loadOverview();
+        });
+
+        phone.on('registrationFailed', function(ev) {
+            phone.stop();
+            phone = null;
+            if (onFail) onFail();
+        });
+
+        phone.on('disconnected', function() {
+            setSipStatus('y', 'Uzildi — qayta ulanilmoqda...');
+        });
+
+        phone.on('newRTCSession', function(ev) {
+            var session = ev.session;
+            if (session.direction === 'incoming') {
+                onIncomingCall(session);
+            }
+        });
+
+        phone.start();
+
+        // 8 sek kutamiz — registered bo'lmasa onFail
+        setTimeout(function() {
+            if (!phone || !phone.isRegistered()) {
+                if (phone) { phone.stop(); phone = null; }
+                if (onFail) onFail();
+            }
+        }, 8000);
+
+    } catch(e) {
+        if (onFail) onFail();
     }
 }
 
@@ -383,124 +362,112 @@ function setSipStatus(color, text) {
     document.getElementById('sipStatus').textContent = text;
 }
 
-// ═══ OUTGOING CALL ═══
+// ═══ OUTGOING CALL (JsSIP) ═══
 function makeCall() {
-    const num = document.getElementById('phoneNumber').value.trim();
+    var num = document.getElementById('phoneNumber').value.trim();
     if (!num) return;
-    if (!ua) { alert('Avval SIP ga kiring!'); return; }
+    if (!phone || !phone.isRegistered()) { alert('Avval SIP ga kiring!'); return; }
 
-    const target = SIP.UserAgent.makeURI('sip:' + num + '@' + sipConfig.server);
-    if (!target) { alert('Noto\'g\'ri raqam'); return; }
+    var options = {
+        mediaConstraints: { audio: true, video: false },
+        pcConfig: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
+    };
 
-    const inviter = new SIP.Inviter(ua, target, {
-        sessionDescriptionHandlerOptions: {
-            constraints: { audio: true, video: false }
-        }
-    });
-
-    currentSession = inviter;
-    setupSessionEvents(inviter);
-
-    inviter.invite().then(function() {
-        setCallState('ringing-out', num);
-        addLog('out', num, 'Chaqirilmoqda...');
-    }).catch(function(e) {
-        addLog('miss', num, 'Xato: ' + (e.message || e));
-        resetCallState();
-    });
+    currentSession = phone.call('sip:' + num + '@' + sipConfig.server, options);
+    setupSessionEvents(currentSession, num);
+    setCallState('ringing-out', num);
+    addLog('out', num, 'Chaqirilmoqda...');
 }
 
-// ═══ INCOMING CALL ═══
-function onIncomingCall(invitation) {
-    currentSession = invitation;
-    const caller = invitation.remoteIdentity.uri.user || 'Noma\'lum';
+// ═══ INCOMING CALL (JsSIP) ═══
+function onIncomingCall(session) {
+    currentSession = session;
+    var caller = session.remote_identity.uri.user || 'Noma\'lum';
 
     document.getElementById('incomingCaller').textContent = caller;
     document.getElementById('incomingCall').classList.add('show');
 
-    setupSessionEvents(invitation);
+    setupSessionEvents(session, caller);
     addLog('in', caller, 'Kiruvchi qo\'ng\'iroq');
+
+    // 30 sek javob berilmasa avtomatik rad
+    session._autoRejectTimer = setTimeout(function() {
+        if (currentSession === session) rejectCall();
+    }, 30000);
 }
 
 function acceptCall() {
     if (!currentSession) return;
+    clearTimeout(currentSession._autoRejectTimer);
     document.getElementById('incomingCall').classList.remove('show');
 
-    currentSession.accept({
-        sessionDescriptionHandlerOptions: {
-            constraints: { audio: true, video: false }
-        }
+    currentSession.answer({
+        mediaConstraints: { audio: true, video: false },
+        pcConfig: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
     });
-    setCallState('active', currentSession.remoteIdentity.uri.user);
 }
 
 function rejectCall() {
     if (!currentSession) return;
+    clearTimeout(currentSession._autoRejectTimer);
     document.getElementById('incomingCall').classList.remove('show');
 
-    currentSession.reject();
-    addLog('miss', currentSession.remoteIdentity.uri.user, 'Rad etildi');
+    currentSession.terminate();
+    var caller = currentSession.remote_identity ? currentSession.remote_identity.uri.user : '';
+    addLog('miss', caller, 'Rad etildi');
     resetCallState();
 }
 
-// ═══ SESSION EVENTS ═══
-function setupSessionEvents(session) {
-    session.stateChange.addListener(function(state) {
-        switch (state) {
-            case SIP.SessionState.Establishing:
-                setCallState('ringing-out', session.remoteIdentity?.uri?.user || '');
-                break;
-            case SIP.SessionState.Established:
-                setCallState('active', session.remoteIdentity?.uri?.user || '');
-                attachAudio(session);
-                break;
-            case SIP.SessionState.Terminated:
-                const dur = callStartTime ? formatTime(Math.floor((Date.now() - callStartTime) / 1000)) : '0:00';
-                addLog('out', session.remoteIdentity?.uri?.user || '', 'Tugadi: ' + dur);
-                resetCallState();
-                break;
+// ═══ SESSION EVENTS (JsSIP) ═══
+function setupSessionEvents(session, num) {
+    session.on('progress', function() {
+        setCallState('ringing-out', num);
+    });
+
+    session.on('accepted', function() {
+        setCallState('active', num);
+    });
+
+    session.on('confirmed', function() {
+        // Audio ulash
+        var remoteAudio = document.getElementById('remoteAudio');
+        var receivers = session.connection.getReceivers();
+        if (receivers.length > 0) {
+            var stream = new MediaStream();
+            receivers.forEach(function(r) { if (r.track) stream.addTrack(r.track); });
+            remoteAudio.srcObject = stream;
+            remoteAudio.play().catch(function() {});
         }
+    });
+
+    session.on('ended', function() {
+        var dur = callStartTime ? formatTime(Math.floor((Date.now() - callStartTime) / 1000)) : '0:00';
+        addLog('out', num, 'Tugadi: ' + dur);
+        resetCallState();
+    });
+
+    session.on('failed', function(ev) {
+        var cause = ev.cause || 'Noma\'lum sabab';
+        addLog('miss', num, 'Muvaffaqiyatsiz: ' + cause);
+        resetCallState();
     });
 }
 
-function attachAudio(session) {
-    const remoteAudio = document.getElementById('remoteAudio');
-    const pc = session.sessionDescriptionHandler?.peerConnection;
-    if (pc) {
-        pc.getReceivers().forEach(function(receiver) {
-            if (receiver.track && receiver.track.kind === 'audio') {
-                const stream = new MediaStream([receiver.track]);
-                remoteAudio.srcObject = stream;
-                remoteAudio.play().catch(function() {});
-            }
-        });
-    }
-}
-
-// ═══ CALL ACTIONS ═══
+// ═══ CALL ACTIONS (JsSIP) ═══
 function endCall() {
     if (!currentSession) return;
-    try {
-        if (currentSession.state === SIP.SessionState.Established) {
-            currentSession.bye();
-        } else {
-            currentSession.cancel();
-        }
-    } catch(e) {}
+    try { currentSession.terminate(); } catch(e) {}
     resetCallState();
 }
 
 function toggleMute() {
-    if (!currentSession) return;
+    if (!currentSession || !currentSession.connection) return;
     isMuted = !isMuted;
-    const pc = currentSession.sessionDescriptionHandler?.peerConnection;
-    if (pc) {
-        pc.getSenders().forEach(function(sender) {
-            if (sender.track && sender.track.kind === 'audio') {
-                sender.track.enabled = !isMuted;
-            }
-        });
-    }
+    currentSession.connection.getSenders().forEach(function(sender) {
+        if (sender.track && sender.track.kind === 'audio') {
+            sender.track.enabled = !isMuted;
+        }
+    });
     document.getElementById('btnMute').classList.toggle('on', isMuted);
 }
 
@@ -517,22 +484,17 @@ function toggleHold() {
 
 function doTransfer() {
     if (!currentSession) return;
-    const target = prompt('Transfer raqam:');
+    var target = prompt('Transfer raqam:');
     if (!target) return;
-    const uri = SIP.UserAgent.makeURI('sip:' + target + '@' + sipConfig.server);
-    if (uri) {
-        currentSession.refer(uri);
-        addLog('out', target, 'Transfer qilindi');
-    }
+    currentSession.refer('sip:' + target + '@' + sipConfig.server);
+    addLog('out', target, 'Transfer qilindi');
 }
 
 function pressKey(k) {
     document.getElementById('phoneNumber').value += k;
     // DTMF yuborish (agar gaplashayotgan bo'lsa)
-    if (currentSession && currentSession.state === SIP.SessionState.Established) {
-        try {
-            currentSession.sessionDescriptionHandler.sendDtmf(k);
-        } catch(e) {}
+    if (currentSession && currentSession.isEstablished && currentSession.isEstablished()) {
+        try { currentSession.sendDTMF(k); } catch(e) {}
     }
 }
 
