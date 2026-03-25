@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PredictaFlow Telephony</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+
+        .header { background: #1e293b; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #334155; }
+        .header h1 { font-size: 20px; color: #38bdf8; }
+        .header .status { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+        .header .dot { width: 8px; height: 8px; border-radius: 50%; }
+        .dot.green { background: #22c55e; }
+        .dot.red { background: #ef4444; }
+
+        .container { display: grid; grid-template-columns: 320px 1fr; height: calc(100vh - 57px); }
+
+        /* Left Panel - Dialer */
+        .left { background: #1e293b; border-right: 1px solid #334155; display: flex; flex-direction: column; }
+        .dialer { padding: 20px; }
+        .dialer h3 { color: #94a3b8; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+
+        .phone-input { display: flex; gap: 8px; margin-bottom: 12px; }
+        .phone-input input { flex: 1; background: #0f172a; border: 1px solid #334155; color: #e2e8f0; padding: 12px; border-radius: 8px; font-size: 18px; text-align: center; letter-spacing: 2px; }
+        .phone-input input:focus { outline: none; border-color: #38bdf8; }
+
+        .ext-input { display: flex; gap: 8px; margin-bottom: 16px; }
+        .ext-input input { flex: 1; background: #0f172a; border: 1px solid #334155; color: #e2e8f0; padding: 8px 12px; border-radius: 6px; font-size: 14px; }
+        .ext-input label { color: #64748b; font-size: 12px; min-width: 70px; display: flex; align-items: center; }
+
+        .call-btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .call-btn.green { background: #22c55e; color: white; }
+        .call-btn.green:hover { background: #16a34a; }
+        .call-btn.red { background: #ef4444; color: white; }
+        .call-btn.red:hover { background: #dc2626; }
+        .call-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-row { display: flex; gap: 8px; margin-top: 8px; }
+        .btn-sm { flex: 1; padding: 8px; border: 1px solid #334155; background: #0f172a; color: #94a3b8; border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.2s; }
+        .btn-sm:hover { border-color: #38bdf8; color: #38bdf8; }
+        .btn-sm.active { background: #38bdf8; color: #0f172a; border-color: #38bdf8; }
+
+        /* Number check result */
+        .check-result { margin-top: 12px; padding: 10px; background: #0f172a; border-radius: 6px; font-size: 13px; display: none; }
+        .check-result.show { display: block; }
+        .check-result .row { display: flex; justify-content: space-between; padding: 3px 0; }
+        .check-result .label { color: #64748b; }
+        .check-result .val { color: #e2e8f0; }
+        .check-result .val.ok { color: #22c55e; }
+        .check-result .val.err { color: #ef4444; }
+
+        /* Call log */
+        .call-log { flex: 1; overflow-y: auto; padding: 12px 20px; }
+        .call-log h3 { color: #94a3b8; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+        .log-item { padding: 8px 10px; background: #0f172a; border-radius: 6px; margin-bottom: 6px; font-size: 13px; border-left: 3px solid #334155; }
+        .log-item.in { border-left-color: #22c55e; }
+        .log-item.out { border-left-color: #38bdf8; }
+        .log-item.miss { border-left-color: #ef4444; }
+        .log-item .time { color: #64748b; font-size: 11px; }
+        .log-item .num { color: #e2e8f0; font-weight: 500; }
+        .log-item .dur { color: #94a3b8; font-size: 12px; }
+
+        /* Right Panel - Tabs */
+        .right { display: flex; flex-direction: column; }
+        .tabs { display: flex; background: #1e293b; border-bottom: 1px solid #334155; overflow-x: auto; }
+        .tab { padding: 12px 20px; font-size: 13px; color: #64748b; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; transition: all 0.2s; }
+        .tab:hover { color: #e2e8f0; }
+        .tab.active { color: #38bdf8; border-bottom-color: #38bdf8; }
+
+        .tab-content { flex: 1; overflow-y: auto; padding: 20px; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* Cards */
+        .card { background: #1e293b; border-radius: 8px; padding: 16px; margin-bottom: 12px; border: 1px solid #334155; }
+        .card h4 { color: #38bdf8; font-size: 14px; margin-bottom: 10px; }
+        .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+
+        .stat-card { background: #0f172a; border-radius: 8px; padding: 14px; text-align: center; }
+        .stat-card .num { font-size: 28px; font-weight: 700; color: #38bdf8; }
+        .stat-card .lbl { font-size: 12px; color: #64748b; margin-top: 4px; }
+
+        /* Table */
+        .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .tbl th { text-align: left; padding: 8px 10px; color: #64748b; font-weight: 500; border-bottom: 1px solid #334155; font-size: 11px; text-transform: uppercase; }
+        .tbl td { padding: 8px 10px; border-bottom: 1px solid #1e293b; }
+        .tbl tr:hover { background: #1e293b; }
+
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .badge.green { background: #052e16; color: #22c55e; }
+        .badge.red { background: #450a0a; color: #ef4444; }
+        .badge.yellow { background: #422006; color: #eab308; }
+        .badge.blue { background: #0c2d48; color: #38bdf8; }
+        .badge.gray { background: #1e293b; color: #94a3b8; }
+
+        /* Dispositions */
+        .disp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+        .disp-item { padding: 10px; background: #0f172a; border-radius: 6px; display: flex; align-items: center; gap: 8px; }
+        .disp-item .icon { font-size: 18px; }
+        .disp-item .code { font-weight: 600; font-size: 13px; }
+        .disp-item .label { font-size: 11px; color: #64748b; }
+
+        /* Events */
+        .event-item { padding: 6px 10px; font-size: 12px; font-family: monospace; background: #0f172a; margin-bottom: 4px; border-radius: 4px; }
+        .event-item .ev-name { color: #38bdf8; font-weight: 600; }
+        .event-item .ev-time { color: #64748b; }
+        .event-item .ev-data { color: #94a3b8; }
+
+        .refresh-btn { padding: 6px 14px; background: #334155; color: #e2e8f0; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-bottom: 12px; }
+        .refresh-btn:hover { background: #475569; }
+
+        .loading { color: #64748b; font-style: italic; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>PredictaFlow Telephony</h1>
+        <div class="status">
+            <div class="dot" id="amiDot"></div>
+            <span id="amiStatus">Tekshirilmoqda...</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Left: Dialer -->
+        <div class="left">
+            <div class="dialer">
+                <h3>Qo'ng'iroq</h3>
+                <div class="phone-input">
+                    <input type="text" id="phoneNumber" placeholder="994003731" maxlength="15" autofocus>
+                </div>
+                <div class="ext-input">
+                    <label>Extension:</label>
+                    <input type="text" id="fromExt" value="2040" placeholder="2040">
+                </div>
+                <button class="call-btn green" id="callBtn" onclick="makeCall()">Qo'ng'iroq qilish</button>
+                <div class="btn-row">
+                    <button class="btn-sm" onclick="holdCall()">Hold</button>
+                    <button class="btn-sm" onclick="muteCall()">Mute</button>
+                    <button class="btn-sm" onclick="transferCall()">Transfer</button>
+                    <button class="btn-sm" onclick="hangupCall()">Tugatish</button>
+                </div>
+
+                <div class="check-result" id="checkResult"></div>
+            </div>
+
+            <div class="call-log">
+                <h3>Oxirgi eventlar</h3>
+                <div id="eventLog"><p class="loading">Yuklanmoqda...</p></div>
+            </div>
+        </div>
+
+        <!-- Right: Tabs -->
+        <div class="right">
+            <div class="tabs">
+                <div class="tab active" onclick="switchTab('overview')">Umumiy</div>
+                <div class="tab" onclick="switchTab('active')">Faol calllar</div>
+                <div class="tab" onclick="switchTab('dispositions')">Statuslar</div>
+                <div class="tab" onclick="switchTab('peers')">Endpointlar</div>
+                <div class="tab" onclick="switchTab('events')">Eventlar</div>
+                <div class="tab" onclick="switchTab('webhooks')">Webhooklar</div>
+                <div class="tab" onclick="switchTab('cdr')">CDR</div>
+            </div>
+
+            <div class="tab-content">
+                <!-- Overview -->
+                <div class="tab-panel active" id="panel-overview">
+                    <div class="card-grid" id="overviewStats">
+                        <div class="stat-card"><div class="num" id="statVersion">-</div><div class="lbl">Asterisk versiya</div></div>
+                        <div class="stat-card"><div class="num" id="statChannels">-</div><div class="lbl">Faol kanallar</div></div>
+                        <div class="stat-card"><div class="num" id="statAmi">-</div><div class="lbl">AMI holati</div></div>
+                        <div class="stat-card"><div class="num" id="statUptime">-</div><div class="lbl">Uptime</div></div>
+                    </div>
+                    <div class="card" style="margin-top:16px">
+                        <h4>Raqam tekshirish</h4>
+                        <div style="display:flex;gap:8px">
+                            <input type="text" id="checkNum" placeholder="Raqam kiriting..." style="flex:1;background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px 12px;border-radius:6px;">
+                            <button class="refresh-btn" onclick="checkNumber()">Tekshirish</button>
+                        </div>
+                        <div id="checkOutput" style="margin-top:10px"></div>
+                    </div>
+                    <div class="card" style="margin-top:12px">
+                        <h4>SIP Code → Status</h4>
+                        <div style="display:flex;gap:8px">
+                            <input type="text" id="sipCodeInput" placeholder="SIP code (200, 486...)" style="flex:1;background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px 12px;border-radius:6px;">
+                            <button class="refresh-btn" onclick="resolveDisp()">Aniqlash</button>
+                        </div>
+                        <div id="dispOutput" style="margin-top:10px"></div>
+                    </div>
+                </div>
+
+                <!-- Active Calls -->
+                <div class="tab-panel" id="panel-active">
+                    <button class="refresh-btn" onclick="loadActive()">Yangilash</button>
+                    <div id="activeList"><p class="loading">Yuklanmoqda...</p></div>
+                </div>
+
+                <!-- Dispositions -->
+                <div class="tab-panel" id="panel-dispositions">
+                    <div id="dispList"><p class="loading">Yuklanmoqda...</p></div>
+                </div>
+
+                <!-- Peers/Endpoints -->
+                <div class="tab-panel" id="panel-peers">
+                    <button class="refresh-btn" onclick="loadPeers()">Yangilash</button>
+                    <div id="peersList"><p class="loading">Yuklanmoqda...</p></div>
+                </div>
+
+                <!-- Events -->
+                <div class="tab-panel" id="panel-events">
+                    <button class="refresh-btn" onclick="loadEvents()">Yangilash</button>
+                    <div id="eventsList"><p class="loading">Yuklanmoqda...</p></div>
+                </div>
+
+                <!-- Webhooks -->
+                <div class="tab-panel" id="panel-webhooks">
+                    <div class="card">
+                        <h4>Webhook qo'shish</h4>
+                        <div style="display:flex;gap:8px;margin-bottom:8px">
+                            <input type="text" id="whUrl" placeholder="http://..." style="flex:2;background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px;border-radius:6px;font-size:13px">
+                            <input type="text" id="whName" placeholder="Nomi" style="flex:1;background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px;border-radius:6px;font-size:13px">
+                            <button class="refresh-btn" onclick="addWebhook()">Qo'shish</button>
+                        </div>
+                    </div>
+                    <div id="webhookList"><p class="loading">Yuklanmoqda...</p></div>
+                </div>
+
+                <!-- CDR -->
+                <div class="tab-panel" id="panel-cdr">
+                    <button class="refresh-btn" onclick="loadCdr()">Yangilash</button>
+                    <div id="cdrList"><p class="loading">Yuklanmoqda...</p></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+const API = window.location.origin;
+let currentChannel = null;
+
+// ═══ API Helpers ═══
+async function api(method, path, body) {
+    const opts = { method, headers: { 'Content-Type': 'application/json' } };
+    if (body) opts.body = JSON.stringify(body);
+    const r = await fetch(`${API}${path}`, opts);
+    return r.json();
+}
+
+// ═══ Call Actions ═══
+async function makeCall() {
+    const num = document.getElementById('phoneNumber').value.trim();
+    const ext = document.getElementById('fromExt').value.trim();
+    if (!num) return alert("Raqam kiriting!");
+
+    const btn = document.getElementById('callBtn');
+    btn.disabled = true;
+    btn.textContent = "Qo'ng'iroq qilinmoqda...";
+
+    const res = await api('POST', '/call/originate', { number: num, from: ext, context: 'from-internal', timeout: 30 });
+
+    if (res.status === 'ok') {
+        btn.className = 'call-btn red';
+        btn.textContent = "Tugatish";
+        btn.disabled = false;
+        btn.onclick = hangupCall;
+        addLogItem('out', num, 'Qo\'ng\'iroq boshlandi');
+    } else {
+        btn.disabled = false;
+        btn.textContent = "Qo'ng'iroq qilish";
+        alert("Xato: " + JSON.stringify(res.result?.Message || res));
+    }
+}
+
+async function hangupCall() {
+    if (currentChannel) {
+        await api('POST', '/call/hangup', { channelId: currentChannel });
+    }
+    resetCallBtn();
+}
+
+async function holdCall() {
+    if (currentChannel) await api('POST', '/call/hold', { channelId: currentChannel });
+}
+
+async function muteCall() {
+    if (currentChannel) await api('POST', '/call/mute', { channelId: currentChannel });
+}
+
+async function transferCall() {
+    const target = prompt("Transfer raqam:");
+    if (target && currentChannel) {
+        await api('POST', '/call/transfer', { channelId: currentChannel, target, context: 'from-internal' });
+    }
+}
+
+function resetCallBtn() {
+    const btn = document.getElementById('callBtn');
+    btn.className = 'call-btn green';
+    btn.textContent = "Qo'ng'iroq qilish";
+    btn.disabled = false;
+    btn.onclick = makeCall;
+    currentChannel = null;
+}
+
+// ═══ Tabs ═══
+function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    event.target.classList.add('active');
+    document.getElementById('panel-' + name).classList.add('active');
+
+    if (name === 'active') loadActive();
+    if (name === 'dispositions') loadDispositions();
+    if (name === 'peers') loadPeers();
+    if (name === 'events') loadEvents();
+    if (name === 'webhooks') loadWebhooks();
+    if (name === 'cdr') loadCdr();
+}
+
+// ═══ Overview ═══
+async function loadOverview() {
+    const info = await api('GET', '/call/info');
+    document.getElementById('statVersion').textContent = info.version || '-';
+    document.getElementById('statChannels').textContent = info.channels || '0';
+    document.getElementById('statAmi').textContent = info.ami_connected ? 'Ulangan' : 'Ulanmagan';
+    document.getElementById('statUptime').textContent = info.uptime || '-';
+
+    const dot = document.getElementById('amiDot');
+    const status = document.getElementById('amiStatus');
+    if (info.ami_connected) {
+        dot.className = 'dot green';
+        status.textContent = `AMI ulangan | Asterisk ${info.version || ''}`;
+    } else {
+        dot.className = 'dot red';
+        status.textContent = 'AMI ulanmagan';
+    }
+}
+
+// ═══ Check Number ═══
+async function checkNumber() {
+    const num = document.getElementById('checkNum').value.trim();
+    if (!num) return;
+    const res = await api('POST', '/status/check-number', { number: num });
+    const out = document.getElementById('checkOutput');
+    out.innerHTML = `
+        <div style="background:#0f172a;padding:10px;border-radius:6px;font-size:13px">
+            <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:#64748b">Asl raqam:</span><span>${res.original}</span></div>
+            <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:#64748b">Normallangan:</span><span>${res.normalized}</span></div>
+            <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:#64748b">To'g'ri:</span><span style="color:${res.valid?'#22c55e':'#ef4444'}">${res.valid?'Ha':'Yo\'q'}</span></div>
+            <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:#64748b">Operator:</span><span style="color:#38bdf8">${res.operator||'-'}</span></div>
+            <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:#64748b">Turi:</span><span>${res.type}</span></div>
+            ${res.error?`<div style="color:#ef4444;margin-top:4px">${res.error}</div>`:''}
+        </div>`;
+}
+
+// ═══ Resolve Disposition ═══
+async function resolveDisp() {
+    const code = document.getElementById('sipCodeInput').value.trim();
+    if (!code) return;
+    const res = await api('POST', '/status/resolve-disposition', { sipCode: code });
+    const colors = { ANSWERED:'#22c55e', BUSY:'#eab308', NO_ANSWER:'#94a3b8', NOT_REACHABLE:'#ef4444', INVALID_NUMBER:'#ef4444', FAILED:'#ef4444', CONGESTION:'#eab308', CANCELLED:'#94a3b8' };
+    document.getElementById('dispOutput').innerHTML = `
+        <div style="background:#0f172a;padding:12px;border-radius:6px;text-align:center">
+            <div style="font-size:24px;color:${colors[res.disposition]||'#94a3b8'};font-weight:700">${res.label}</div>
+            <div style="color:#64748b;font-size:12px;margin-top:4px">${res.disposition} (${res.source})</div>
+        </div>`;
+}
+
+// ═══ Active Calls ═══
+async function loadActive() {
+    const res = await api('GET', '/call/active');
+    const el = document.getElementById('activeList');
+    if (res.Response === 'Success' || res.EventList) {
+        el.innerHTML = '<p style="color:#22c55e">Faol kanallar so\'raldi — AMI response yuqorida</p><pre style="background:#0f172a;padding:10px;border-radius:6px;font-size:12px;overflow-x:auto">' + JSON.stringify(res, null, 2) + '</pre>';
+    } else {
+        el.innerHTML = '<pre style="background:#0f172a;padding:10px;border-radius:6px;font-size:12px;overflow-x:auto">' + JSON.stringify(res, null, 2) + '</pre>';
+    }
+}
+
+// ═══ Dispositions ═══
+async function loadDispositions() {
+    const res = await api('GET', '/status/dispositions');
+    const icons = { ANSWERED:'✅', NO_ANSWER:'📵', BUSY:'🔴', FAILED:'❌', NOT_REACHABLE:'⛔', INVALID_NUMBER:'⚠️', CONGESTION:'🔶', CANCELLED:'🚫' };
+    const el = document.getElementById('dispList');
+    el.innerHTML = '<div class="disp-grid">' + res.dispositions.map(d => `
+        <div class="disp-item">
+            <span class="icon">${icons[d.code]||'❓'}</span>
+            <div>
+                <div class="code">${d.code}</div>
+                <div class="label">${d.label_uz}</div>
+            </div>
+        </div>`).join('') + '</div>';
+}
+
+// ═══ Peers/Endpoints ═══
+async function loadPeers() {
+    const res = await api('GET', '/call/endpoints');
+    document.getElementById('peersList').innerHTML = '<pre style="background:#0f172a;padding:10px;border-radius:6px;font-size:12px;overflow-x:auto">' + JSON.stringify(res, null, 2) + '</pre>';
+}
+
+// ═══ Events ═══
+async function loadEvents() {
+    const res = await api('GET', '/webhook/events');
+    const el = document.getElementById('eventsList');
+    if (!res.events || res.events.length === 0) {
+        el.innerHTML = '<p style="color:#64748b">Hozircha eventlar yo\'q</p>';
+        return;
+    }
+    el.innerHTML = res.events.map(e => `
+        <div class="event-item">
+            <span class="ev-name">${e.event}</span>
+            <span class="ev-time">${new Date(e.timestamp).toLocaleTimeString()}</span>
+            <div class="ev-data">${e.data?.callerIdNum||''} → ${e.data?.exten||''} (${e.data?.channel||''})</div>
+        </div>`).join('');
+}
+
+// ═══ Webhooks ═══
+async function loadWebhooks() {
+    const res = await api('GET', '/webhook');
+    const el = document.getElementById('webhookList');
+    if (!res.webhooks || res.webhooks.length === 0) {
+        el.innerHTML = '<p style="color:#64748b">Webhook ro\'yxatdan o\'tmagan</p>';
+        return;
+    }
+    el.innerHTML = '<table class="tbl"><tr><th>Nomi</th><th>URL</th><th>Eventlar</th><th>Triggers</th><th></th></tr>' +
+        res.webhooks.map(w => `<tr>
+            <td>${w.name}</td>
+            <td style="font-size:11px;color:#94a3b8">${w.url}</td>
+            <td><span class="badge blue">${w.events.join(', ')}</span></td>
+            <td>${w.triggerCount}</td>
+            <td><button class="btn-sm" onclick="deleteWebhook('${w.id}')" style="color:#ef4444;border-color:#ef4444">O'chirish</button></td>
+        </tr>`).join('') + '</table>';
+}
+
+async function addWebhook() {
+    const url = document.getElementById('whUrl').value.trim();
+    const name = document.getElementById('whName').value.trim() || 'webhook';
+    if (!url) return alert("URL kiriting!");
+    await api('POST', '/webhook/register', { url, name, events: ['*'] });
+    loadWebhooks();
+}
+
+async function deleteWebhook(id) {
+    await api('DELETE', '/webhook/' + id);
+    loadWebhooks();
+}
+
+// ═══ CDR ═══
+async function loadCdr() {
+    const res = await api('GET', '/cdr');
+    document.getElementById('cdrList').innerHTML = '<pre style="background:#0f172a;padding:10px;border-radius:6px;font-size:12px;overflow-x:auto">' + JSON.stringify(res, null, 2) + '</pre>';
+}
+
+// ═══ Event Log (left panel) ═══
+function addLogItem(type, num, text) {
+    const el = document.getElementById('eventLog');
+    if (el.querySelector('.loading')) el.innerHTML = '';
+    const item = document.createElement('div');
+    item.className = 'log-item ' + type;
+    item.innerHTML = `<span class="time">${new Date().toLocaleTimeString()}</span> <span class="num">${num}</span><div class="dur">${text}</div>`;
+    el.prepend(item);
+}
+
+// ═══ Phone input: auto-check ═══
+let checkTimeout;
+document.getElementById('phoneNumber').addEventListener('input', function() {
+    clearTimeout(checkTimeout);
+    const val = this.value.trim();
+    if (val.length >= 5) {
+        checkTimeout = setTimeout(async () => {
+            const res = await api('POST', '/status/check-number', { number: val });
+            const el = document.getElementById('checkResult');
+            el.className = 'check-result show';
+            el.innerHTML = `
+                <div class="row"><span class="label">Format:</span><span class="val ${res.valid?'ok':'err'}">${res.valid?'To\'g\'ri':'Xato'}</span></div>
+                ${res.operator?`<div class="row"><span class="label">Operator:</span><span class="val">${res.operator}</span></div>`:''}
+                ${res.normalized!==val?`<div class="row"><span class="label">Normallangan:</span><span class="val">${res.normalized}</span></div>`:''}
+                ${res.error?`<div class="row"><span class="val err">${res.error}</span></div>`:''}`;
+        }, 500);
+    }
+});
+
+// Enter key = call
+document.getElementById('phoneNumber').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') makeCall();
+});
+
+// ═══ Auto-refresh events ═══
+async function refreshEventLog() {
+    try {
+        const res = await api('GET', '/webhook/events');
+        if (res.events && res.events.length > 0) {
+            const el = document.getElementById('eventLog');
+            el.innerHTML = res.events.slice(0, 20).map(e => {
+                const type = e.event?.includes('hangup') ? 'miss' : e.event?.includes('start') ? 'out' : 'in';
+                return `<div class="log-item ${type}">
+                    <span class="time">${new Date(e.timestamp).toLocaleTimeString()}</span>
+                    <span class="num">${e.data?.callerIdNum||e.event}</span>
+                    <div class="dur">${e.data?.exten||''} ${e.data?.causeTxt||''}</div>
+                </div>`;
+            }).join('');
+        }
+    } catch {}
+}
+
+// ═══ Init ═══
+loadOverview();
+setInterval(loadOverview, 10000);
+setInterval(refreshEventLog, 5000);
+</script>
+</body>
+</html>
