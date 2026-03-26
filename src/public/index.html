@@ -126,6 +126,7 @@
         <input type="text" id="sipServer" placeholder="Server IP" value="192.168.33.116">
         <input type="text" id="sipUser" placeholder="SIP Username (masalan: 2040)">
         <input type="password" id="sipPass" placeholder="SIP Password">
+        <input type="password" id="apiKey" placeholder="API Key" value="">
         <button onclick="doLogin()">Kirish</button>
         <div class="err" id="loginErr"></div>
     </div>
@@ -267,8 +268,9 @@ let isHeld = false;
 let sipConfig = {};
 
 // ═══ API ═══
+let currentApiKey = '';
 async function api(m, p, b) {
-    const o = { method: m, headers: { 'Content-Type': 'application/json' } };
+    const o = { method: m, headers: { 'Content-Type': 'application/json', 'x-api-key': currentApiKey } };
     if (b) o.body = JSON.stringify(b);
     try { const r = await fetch(API + p, o); return r.json(); } catch(e) { return { error: e.message }; }
 }
@@ -278,9 +280,11 @@ function doLogin() {
     const server = document.getElementById('sipServer').value.trim();
     const user = document.getElementById('sipUser').value.trim();
     const pass = document.getElementById('sipPass').value.trim();
+    const apiKey = document.getElementById('apiKey').value.trim();
 
-    if (!server || !user || !pass) { showLoginErr("Barcha maydonlarni to'ldiring"); return; }
+    if (!server || !user || !pass || !apiKey) { showLoginErr("Barcha maydonlarni to'ldiring"); return; }
 
+    currentApiKey = apiKey;
     sipConfig = { server: server, user: user, pass: pass };
     showLoginErr('Ulanilmoqda...');
 

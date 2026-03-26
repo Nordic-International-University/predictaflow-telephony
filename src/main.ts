@@ -5,6 +5,8 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import { AppModule } from './app.module';
+import { ApiKeyGuard } from './common/auth.guard';
+import { ConfigService } from '@nestjs/config';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -14,6 +16,10 @@ async function bootstrap() {
 
   app.enableCors({ origin: '*' });
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
+
+  // API Key himoya — barcha endpointlar uchun
+  const configService = app.get(ConfigService);
+  app.useGlobalGuards(new ApiKeyGuard(configService));
 
   const config = new DocumentBuilder()
     .setTitle('PredictaFlow Telephony')
@@ -39,6 +45,7 @@ Faqat local — 127.0.0.1 (backend shu serverda ishlaydi).
     .addTag('Webhook', 'Call eventlarni tashqi tizimlarga yuborish')
     .addTag('Channel', 'Asterisk kanallar — faol qo\'ng\'iroqlar, trunk holati')
     .addTag('Recording', 'Ovoz yozuvlari — ro\'yxat, yuklab olish, o\'chirish')
+    .addApiKey({ type: 'apiKey', name: 'x-api-key', in: 'header', description: 'API Key' }, 'api-key')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
